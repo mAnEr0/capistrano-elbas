@@ -16,6 +16,31 @@ module Elbas
         InstanceCollection.new instance_ids
       end
 
+      def enter_standby(instance_id)
+
+        aws_client.enter_standby({
+                                   auto_scaling_group_name: name,
+                                   instance_ids: [
+                                     instance_id,
+                                   ],
+                                   should_decrement_desired_capacity: true,
+                                 })
+
+      end
+
+      def exit_standby(instance_id)
+
+        Elbas::Retryable.times(5).delay(120) do
+          aws_client.exit_standby({
+                                    auto_scaling_group_name: name,
+                                    instance_ids: [
+                                      instance_id,
+                                    ],
+                                  })
+        end
+
+      end
+
       def launch_template
         lts = aws_launch_template || aws_launch_template_specification
         raise Elbas::Errors::NoLaunchTemplate unless lts
@@ -28,25 +53,26 @@ module Elbas
       end
 
       private
-        def aws_namespace
-          ::Aws::AutoScaling
-        end
 
-        def query_autoscale_group_by_name(name)
-          aws_client
-            .describe_auto_scaling_groups(auto_scaling_group_names: [name])
-            .auto_scaling_groups
-            .first
-        end
+      def aws_namespace
+        ::Aws::AutoScaling
+      end
 
-        def aws_launch_template
-          aws_counterpart.launch_template
-        end
+      def query_autoscale_group_by_name(name)
+        aws_client
+          .describe_auto_scaling_groups(auto_scaling_group_names: [name])
+          .auto_scaling_groups
+          .first
+      end
 
-        def aws_launch_template_specification
-          aws_counterpart.mixed_instances_policy&.launch_template
-            &.launch_template_specification
-        end
+      def aws_launch_template
+        aws_counterpart.launch_template
+      end
+
+      def aws_launch_template_specification
+        aws_counterpart.mixed_instances_policy&.launch_template
+          &.launch_template_specification
+      end
     end
   end
 end
